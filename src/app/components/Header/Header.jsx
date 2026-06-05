@@ -10,7 +10,11 @@ import "./Header.css";
 import { IoMdArrowDropdown } from "react-icons/io";
 import { getCategories,getHeaderDepartments } from "@/app/lib/api";
 import ComingSoonPopup from "@/app/components/comingSoon/comingSoon";
-export default function Header({ onDeptClick, onDiscountClick }) {
+
+
+
+export default function Header({ onDeptClick, onDiscountClick, activeDeptId }) {
+  // const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showDelcoMenu, setShowDelcoMenu] = useState(false);
@@ -21,7 +25,17 @@ export default function Header({ onDeptClick, onDiscountClick }) {
   const [discounts, setDiscounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [popupTitle, setPopupTitle] = useState("");
+  const [activeDept, setActiveDept] = useState(activeDeptId || null);
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  const containerRef = useRef(null);
+  const [showAisleDropdown, setShowAisleDropdown] = useState(false);
+  const aisleDropdownRef = useRef(null);
 
+  const handleDeptClick = (dept) => {
+    const name = dept.name?.toLowerCase();
+    window.location.href = dept.url;
+  };
   const slides = [
     "/assets/Images/1.jpg",
     "/assets/Images/2.jpg",
@@ -29,12 +43,75 @@ export default function Header({ onDeptClick, onDiscountClick }) {
     "/assets/Images/4.jpg",
   ];
 
+  
 
   const [index, setIndex] = useState(1);
   const [transition, setTransition] = useState(true);
 
   const extendedSlides = [slides[slides.length - 1], ...slides, slides[0]];
+  const updateIndicator = (element) => {
+    if (element && containerRef.current) {
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
 
+      setIndicatorStyle({
+        left: elementRect.left - containerRect.left,
+        width: elementRect.width,
+      });
+    }
+  };
+
+  const handleMouseEnter = (e) => {
+    updateIndicator(e.currentTarget);
+  };
+
+  const handleMouseLeave = () => {
+    if (containerRef.current) {
+      const activeEl = containerRef.current.querySelector(".sidebar-dept-item.active");
+      if (activeEl) {
+        updateIndicator(activeEl);
+      }
+    }
+  };
+  // 1. Subdomain matching logic helper
+  const getActiveDeptBySubdomain = (items) => {
+    if (typeof window === "undefined") return null;
+    const currentHost = window.location.hostname.toLowerCase();
+
+    let matchedKeyword = "";
+    if (currentHost.includes("grocery.")) matchedKeyword = "grocery";
+    else if (currentHost.includes("butchershop.")) matchedKeyword = "butcher shop";
+    else if (currentHost.includes("bakery.")) matchedKeyword = "bakery";
+    else if (currentHost.includes("food.")) matchedKeyword = "prepared food";
+    else if (currentHost.includes("floral.")) matchedKeyword = "floral";
+
+    if (!matchedKeyword) return null;
+
+    const found = items.find(dept => dept.name?.toLowerCase() === matchedKeyword);
+    return found ? found._id : null;
+  };
+
+  useEffect(() => {
+    if (headerDepts.length > 0) {
+      const matchedId = getActiveDeptBySubdomain(headerDepts);
+      if (matchedId) {
+        setActiveDept(matchedId);
+      }
+    }
+  }, [headerDepts]);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const activeEl = containerRef.current.querySelector(".sidebar-dept-item.active");
+      if (activeEl) {
+        const timer = setTimeout(() => updateIndicator(activeEl), 100);
+        return () => clearTimeout(timer);
+      } else {
+        const firstEl = containerRef.current.querySelector(".sidebar-dept-item");
+        if (firstEl) updateIndicator(firstEl);
+      }
+    }
+  }, [headerDepts, activeDept]);
   useEffect(() => {
     const interval = setInterval(() => {
       nextSlide();
@@ -45,7 +122,21 @@ export default function Header({ onDeptClick, onDiscountClick }) {
   const nextSlide = () => {
     setIndex((prev) => prev + 1);
   };
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (aisleDropdownRef.current && !aisleDropdownRef.current.contains(event.target)) {
+        setShowAisleDropdown(false);
+      }
+    };
 
+    if (showAisleDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showAisleDropdown]);
   const prevSlide = () => {
     setIndex((prev) => prev - 1);
   };
@@ -61,6 +152,24 @@ export default function Header({ onDeptClick, onDiscountClick }) {
     }
   };
 
+  // useEffect(() => {
+  //   const handleScroll = () => {
+  //     const sideCart = document.querySelector(".side-cart-contaner");
+  //     if (!sideCart) return;
+
+  //     if (window.scrollY > 80) {
+  //       sideCart.classList.add("sidecart-scrolled");
+  //     } else {
+  //       sideCart.classList.remove("sidecart-scrolled");
+  //     }
+  //   };
+
+  //   window.addEventListener("scroll", handleScroll);
+
+  //   handleScroll();
+
+  //   return () => window.removeEventListener("scroll", handleScroll);
+  // }, [showSideCart]);
 
   useEffect(() => {
     if (!transition) {
@@ -85,7 +194,6 @@ export default function Header({ onDeptClick, onDiscountClick }) {
       if (data) {
         setDepartments(data);
 
-        // pick random departments
         const count =
           data.length <= 5 ? 2 : Math.floor(data.length / 2); // rule
         const shuffled = [...data].sort(() => 0.5 - Math.random());
@@ -97,7 +205,10 @@ export default function Header({ onDeptClick, onDiscountClick }) {
     }
     async function getDicounts() {
       setLoading(true);
-     
+      const data = await getSalesProductData();
+      if (data?.data) {
+        setDiscounts(data?.data);
+      }
       setLoading(false);
     }
     fetchData();
@@ -106,11 +217,11 @@ export default function Header({ onDeptClick, onDiscountClick }) {
   }, []);
 
 
-  const [showSidebarDepts, setShowSidebarDepts] = useState(true);
+  const [showSidebarDepts, setShowSidebarDepts] = useState(false);
   const [showSidebarAisles, setShowSidebarAisles] = useState(true);
 
-  const [isOpen,setIsOpen] = useState(false);
-  
+  const [isOpen, setIsOpen] = useState(false);
+
 
 
 
@@ -155,7 +266,7 @@ export default function Header({ onDeptClick, onDiscountClick }) {
               <div className="search-container">
                 <span
                   className="delco-fresh-btn"
-                  onClick={() => {}}
+                  onClick={() => { }}
                 >
                   {selectedCategory} <IoMdArrowDropdown />
                 </span>
@@ -183,16 +294,17 @@ export default function Header({ onDeptClick, onDiscountClick }) {
               </div>
             </div>
             <div className="topbar-right">
-              <RiAccountCircleLine onClick={()=>{setIsOpen(true)}} size={30} color="#ffff" />
-           
-                <MdOutlineShoppingCart
+              <RiAccountCircleLine onClick={() => { setIsOpen(true) }} size={30} color="#ffff" />
+              <MdOutlineShoppingCart
                   size={30}
                   color="#fff"
                   onClick={()=>{setIsOpen(true)}}
                 />
-           
             </div>
           </div>
+        </div>
+        <div className="MainMenuDelcoTopContainer">
+
         </div>
         {showModal && (
           <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -265,13 +377,39 @@ export default function Header({ onDeptClick, onDiscountClick }) {
                 <h2>Delco Farmers Market</h2>
               </div>
 
-              
+              {/* <div className="sidebar-dropdown">
+                <div
+                  className="sidebar-dropdown-header"
+                  onClick={() => setShowSidebarAisles((prev) => !prev)}
+                >
+                  <span>Aisles</span>
+                  <IoMdArrowDropdown
+                    className={showSidebarAisles ? "rotate" : ""}
+                  />
+                </div>
 
-              
-               <div className="sidebar-dropdown">
-           
-
-            </div>
+                {showSidebarAisles && (
+                  <div className="sidebar-dropdown-content">
+                    {departments.map((dept) => (
+                      <div
+                        key={dept._id}
+                        className="sidebar-dept-item"
+                        style={{ padding: '4px 0px' }}
+                        onClick={() => {
+                          setShowSidebar(false);
+                          onDeptClick(dept._id); // SAME as header
+                        }}
+                      >
+                        <img
+                          src={`https://api.delcofarmersmarket.com${dept.image}`}
+                          alt={dept.name}
+                        />
+                        <span>{dept.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div> */}
 
 
               <div className="sidebar-dropdown">
@@ -291,9 +429,10 @@ export default function Header({ onDeptClick, onDiscountClick }) {
                       <div
                         key={dept._id}
                         className="sidebar-dept-item"
+                        style={{ padding: '4px 0px' }}
                         onClick={() => {
                           setShowSidebar(false);
-                          window.location.href = dept.url;
+                          handleDeptClick(dept);
                         }}
                       >
                         <img
@@ -308,11 +447,11 @@ export default function Header({ onDeptClick, onDiscountClick }) {
               </div>
 
 
-              
+
 
               <div className="sidebar-actions">
-                <button onClick={()=>{setIsOpen(true)}} className="btn sign-in">Sign Up</button>
-                <button onClick={()=>{setIsOpen(true)}} className="btn cart">Sign In</button>
+                <button onClick={() => { setIsOpen(true) }} className="btn sign-in">Sign Up</button>
+                <button onClick={() => { setIsOpen(true) }} className="btn cart">Sign In</button>
               </div>
             </div>
           </div>
@@ -321,69 +460,163 @@ export default function Header({ onDeptClick, onDiscountClick }) {
 
       <div className="sub-header">
         <div className="sub-header-container">
-          <div className="sub-header-logo-container dropdown">
+          <div onClick={() => router.push("/")} className="sub-header-logo-container dropdown">
             <img
               src="/assets/Images/edit-logo.png"
               className="sub-header-logo"
               alt=""
             />
-            {/* <MdKeyboardArrowDown size={20} />
 
-            <div className="dropdown-menu">
-              <ul>
-                <li>About Us</li>
-                <li>Contact Support</li>
-                <li>In-Store Mode</li>
-                <li>Sustainability</li>
-                <li>Grocery Subscription</li>
-                <li>Prime Savings</li>
-              </ul>
-            </div> */}
           </div>
 
-          <span style={{ color: "lightgray", fontSize: "20px" }}>|</span>
+          {/* <span style={{ color: "lightgray", fontSize: "20px" }}>|</span> */}
 
 
 
 
-          <div className="sub-header-left">
+          {/* <div className="sub-header-left">
 
-            <div className="dropdown">
-              <a href="#">
-                Departments <MdKeyboardArrowDown size={13} />
+
+            <div className="dropdown" ref={aisleDropdownRef}>
+              <a
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowAisleDropdown((prev) => !prev);
+                }}
+              >
+                Aisles <MdKeyboardArrowDown size={20} />
               </a>
-              <div className="dropdown-menu">
-                <div className="explore-container depts">
-                  <div className="" style={{ flex: 1 }}>
-                    <ul>
-                      {headerDepts && headerDepts?.map((dept) => (
-                        <li key={dept._id}>
-                          <a href={dept.url}><img style={{ width: "20px", height: "20px", marginRight: "10px" }} src={"https://api.delcofarmersmarket.com" + dept.image} alt="" srcset="" /> {dept.name}</a>
-                        </li>
+
+              {showAisleDropdown && (
+                <div className="dropdown-menu" style={{ display: "block" }}>
+                  <div
+                    className="explore-container"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(300px, 2fr))",
+                      gap: "20px",
+                      maxHeight: "600px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {departments
+                      .reduce((rows, dept, index) => {
+                        const rowIndex = Math.floor(index / 10);
+                        if (!rows[rowIndex]) rows[rowIndex] = [];
+                        rows[rowIndex].push(dept);
+                        return rows;
+                      }, [])
+                      .map((group, i) => (
+                        <ul key={i} style={{ listStyle: "none", padding: 0, display: 'flex', flexWrap: 'wrap' }}>
+                          {group.map((dept) => (
+                            <li
+                              key={dept._id}
+                              onClick={() => {
+                                onDeptClick(dept._id);
+                                setShowAisleDropdown(false); // Item click hote hi dropdown band ho jaye
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                padding: "8px 12px",
+                                cursor: "pointer",
+                                width: 'fit-content',
+                                fontSize: "var(--fs-14)",
+                                fontWeight: "var(--fw-400)"
+                              }}
+                            >
+                              <img
+                                style={{
+                                  width: "20px",
+                                  height: "20px",
+                                  marginRight: "10px",
+                                  borderRadius: "4px",
+                                }}
+                                src={`https://api.delcofarmersmarket.com${dept.image}`}
+                                alt={dept.name}
+                              />
+                              {dept.name}
+                            </li>
+                          ))}
+                        </ul>
                       ))}
-                    </ul>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
 
-           
+          </div> */}
+          <div className="MainMenuDelcoTopContainersss">
+            <div className="departments_Headersss" ref={containerRef} style={{ position: "relative" }}>
+
+              {loading ? (
+                <>
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="DpaertmentShimmerDevDesktopItem DpaertmentShimmerDev">
+                      <div className="DpaertmentShimmerDevDesktopImg DpaertmentShimmerDev"></div>
+                      <div className="DpaertmentShimmerDevDesktopText DpaertmentShimmerDev"></div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {headerDepts?.map((dept) => {
+                    const isActive = activeDept === dept._id;
+                    return (
+                      <div
+                        key={dept._id}
+                        className={`sidebar-dept-item ${isActive ? "active" : ""}`}
+                        onClick={() => {
+                          setActiveDept(dept._id);
+                          setShowSidebar(false);
+                          handleDeptClick(dept);
+                        }}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                      >
+                        <img
+                          src={`https://api.delcofarmersmarket.com${dept.image}`}
+                          alt={dept.name}
+                        />
+                        <span>{dept.name}</span>
+                      </div>
+                    );
+                  })}
+
+                  <div
+                    className="movable-line-indicator"
+                    style={{
+                      position: "absolute",
+                      bottom: "-2px",
+                      left: "0",
+                      borderRadius: '5px',
+                      height: "32px",
+                      backgroundColor: "#ececec",
+                      width: `${indicatorStyle.width}px`,
+                      transform: `translateX(${indicatorStyle.left}px)`,
+                      transition: "transform 0.3s ease, width 0.3s ease",
+                      pointerEvents: "none"
+                    }}
+                  />
+                </>
+              )}
+
+            </div>
           </div>
+
+
 
           <div className="sub-header-right">
             <div className="location">
               <span>
                 1850 Delmar drive, Folcroft, PA
-                {/* <span className="down-icon">
-                  <MdKeyboardArrowDown />
-                </span> */}
               </span>
             </div>
             <div className="sub-header-right-buttons">
               <button
                 className={"active"}
-                // onClick={() => setActiveModal("pickup")}
               >
                 <span>
                   <img src="/assets/Icons/store.png" alt="pickup" />
@@ -408,11 +641,52 @@ export default function Header({ onDeptClick, onDiscountClick }) {
 
           </div>
         </div>
+
         <div className="overlay"></div>
       </div>
+      <div className="MainMenuDelcoTopContainersssMobile" style={{ height: '60px' }}>
+        <div className="departments_Headersss" style={{ position: "relative", gap: '12px', color: 'var(--dark-medium-green)', padding: '10px' }}>
 
+          {loading ? (
+            <>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="DpaertmentShimmerDevMobileItem DpaertmentShimmerDev" style={{ flexShrink: '0', borderRadius: '6px' }}>
+                  <div className="DpaertmentShimmerDevMobileText DpaertmentShimmerDev"></div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {headerDepts?.map((dept) => {
+                const isActive = activeDept === dept._id;
+                return (
+                  <div
+                    key={dept._id}
+                    className={`sidebar-dept-item ${isActive ? "active" : ""}`}
+                    style={{ flexShrink: '0', backgroundColor: '#ffffff', borderRadius: '6px', boxShadow: 'rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.06) 0px 1px 2px 0px', userSelect: 'none' }}
+                    onClick={() => {
+                      setActiveDept(dept._id);
+                      setShowSidebar(false);
+                      handleDeptClick(dept);
+                    }}
+                  >
+                    <span style={{ userSelect: 'none' }}>{dept.name}</span>
+                  </div>
+                );
+              })}
+            </>
+          )}
 
-      <ComingSoonPopup isOpen={isOpen} onClose={()=>{setIsOpen(false)}} />
+        </div>
+      </div>
+      {activeModal === "delivery" && (
+        <DeliveryModal onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === "pickup" && (
+        <LocationModal onClose={() => setActiveModal(null)} />
+      )}
+
+      <ComingSoonPopup isOpen={isOpen} onClose={() => { setIsOpen(false) }} />
     </>
   );
 }
