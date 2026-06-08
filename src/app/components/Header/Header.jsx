@@ -81,6 +81,7 @@ export default function Header({ onDeptClick, onDiscountClick, activeDeptId }) {
     let matchedKeyword = "";
     if (currentHost.includes("grocery.")) matchedKeyword = "grocery";
     else if (currentHost.includes("butchershop.")) matchedKeyword = "butcher shop";
+    else if (currentHost.includes("cafe.")) matchedKeyword = "cafe";
     else if (currentHost.includes("bakery.")) matchedKeyword = "bakery";
     else if (currentHost.includes("food.")) matchedKeyword = "prepared food";
     else if (currentHost.includes("floral.")) matchedKeyword = "floral";
